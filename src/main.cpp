@@ -136,7 +136,7 @@ int main()
 			}
 			break;
 		case 13:
-			// Start camera calibration
+			// Start camera calibration if there are over 15 valid images
 			if (savedImages.size() > 15)
 			{
 				cameraCalibration(savedImages, chessboardDimensions, calibrationSquareDimension, cameraMatrix, distCoeffs);
@@ -196,23 +196,27 @@ void getChessboardCorners(vector<Mat> images, vector<vector<Point2f>>& allFoundC
 	}
 }
 
+// Camera calibration from images with detected patterns
 void cameraCalibration(vector<Mat> calibrationImages, Size boardSize, float squareSize, Mat& cameraMatrix, Mat& distCoeffs)
 {
-	vector<vector<Point3f>> objectPoints(1);
 	vector<vector<Point2f>> imagePoints;
+	vector<vector<Point3f>> objectPoints(1);
 	getChessboardCorners(calibrationImages, imagePoints, false);
 
 	calcBoardCornerPositions(boardSize, squareSize, objectPoints[0]);
 	objectPoints.resize(imagePoints.size(), objectPoints[0]);
 
+	// Radial vectors and tangential vectors
 	vector<Mat> rvecs, tvecs;
-	// Distortion coefficients of 8 elements
+	// Distance coefficients of 8 elements
 	distCoeffs = Mat::zeros(8, 1, CV_64F);
 
+	// The Magic of OpenCV!
 	calibrateCamera(objectPoints, imagePoints, boardSize, cameraMatrix, distCoeffs, rvecs, tvecs);
 }
 
-bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distanceCoefficients)
+// Save camera calibration matrix into a file
+bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distCoeffs)
 {
 	ofstream outStream(name);
 	if (outStream)
@@ -222,21 +226,21 @@ bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distanceCoefficien
 
 		for (int r = 0; r < rows; r++)
 		{
-			for (int c = 0; c > columns; c++)
+			for (int c = 0; c < columns; c++)
 			{
 				double value = cameraMatrix.at<double>(r, c);
 				outStream << value << endl;
 			}
 		}
 
-		rows = distanceCoefficients.rows;
-		columns = distanceCoefficients.cols;
+		rows = distCoeffs.rows;
+		columns = distCoeffs.cols;
 
 		for (int r = 0; r < rows; r++)
 		{
-			for (int c = 0; c > columns; c++)
+			for (int c = 0; c < columns; c++)
 			{
-				double value = distanceCoefficients.at<double>(r, c);
+				double value = distCoeffs.at<double>(r, c);
 				outStream << value << endl;
 			}
 		}
