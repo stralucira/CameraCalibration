@@ -46,3 +46,5 @@ Thumbs.db
 *.sln
 .vs/*
 /x64/*
+/Debug/*
+/opencv/*

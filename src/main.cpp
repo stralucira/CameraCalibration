@@ -14,7 +14,7 @@ using namespace std;
 
 void calcBoardCornerPositions(Size boardSize, float squareSize, vector<Point3f>& corners);
 
-int boardCount = 4; //Number of boards to be found before calibration.
+int boardCount = 4; // Number of boards to be found before calibration.
 
 int main()
 {
@@ -24,7 +24,7 @@ int main()
 	vector<Mat> rvecs, tvecs;
 	int successes = 0;
 
-	//Create a 3x3 identity matrix
+	// Create a 3x3 identity matrix
 	Mat cameraMatrix = Mat::eye(3, 3, CV_64F);
 
 	// Distortion coefficients of 8 elements
@@ -34,7 +34,7 @@ int main()
 	Size testPatternSize(6, 9);
 	int cornersPerBoard = 6 * 9;
 
-	//CvCapture* capture = cvCreateCameraCapture(0);
+	// CvCapture* capture = cvCreateCameraCapture(0);
 	VideoCapture stream1(0);
 	Mat cameraFrame;
 	Mat cameraFrame_bw;
@@ -47,7 +47,8 @@ int main()
 	cvNamedWindow("Camera");
 	cvNamedWindow("Pattern");
 
-	if (!stream1.isOpened()) { //check if video device is initialised
+	if (!stream1.isOpened()) // Check if video device is initialised
+	{
 		cout << "cannot open camera";
 	}
 
@@ -58,17 +59,19 @@ int main()
 
 	calcBoardCornerPositions(testPatternSize, squareSize, objectPoints[0]);
 
-	//Find boardCount number of patterns and record the coordinates.
+	// Find boardCount number of patterns and record the coordinates.
 	while (successes < boardCount) {
 		stream1.read(cameraFrame);
 		imshow("Camera", cameraFrame);
 
 		//Try to find the chessboard pattern when "p" is pressed
-		if (waitKey(1) == 'p') {
+		if (waitKey(1) == 'p')
+		{
 			bool patternFound = findChessboardCorners(cameraFrame, testPatternSize, pointBuffer, 
 				CALIB_CB_ADAPTIVE_THRESH + CALIB_CB_NORMALIZE_IMAGE + CALIB_CB_FILTER_QUADS);
 
-			if (patternFound) {
+			if (patternFound)
+			{
 				cvtColor(cameraFrame, cameraFrame_bw, CV_BGR2GRAY);
 				cornerSubPix(cameraFrame_bw, pointBuffer, Size(11, 11), Size(-1, -1), TermCriteria(CV_TERMCRIT_EPS | CV_TERMCRIT_ITER, 30, 0.1));
 
@@ -93,9 +96,14 @@ int main()
 }
 
 // Convert the 2D points obtained from image to 3D coordinates
-void calcBoardCornerPositions(Size boardSize, float squareSize, vector<Point3f>& corners) {
+void calcBoardCornerPositions(Size boardSize, float squareSize, vector<Point3f>& corners)
+{
 	for (int i = 0; i < boardSize.height; ++i)
+	{
 		for (int j = 0; j < boardSize.width; ++j)
-			//Set z=0 for every point, considering the chessboard is planar.
+		{
+			// Set z = 0 for every point, considering the chessboard is planar.
 			corners.push_back(Point3f(float(j*squareSize), float(i*squareSize), 0));
+		}
+	}
 }
