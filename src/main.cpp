@@ -123,22 +123,22 @@ int main()
 				Mat im = imread("headPose.jpg");
 
 				// 2D image points. If you change the image, you need to change vector
-				vector<Point2d> image_points;
-				image_points.push_back(Point2d(359, 391));	// Nose tip
-				image_points.push_back(Point2d(399, 561));	// Chin
-				image_points.push_back(Point2d(337, 297));	// Left eye left corner
-				image_points.push_back(Point2d(513, 301));	// Right eye right corner
-				image_points.push_back(Point2d(345, 465));	// Left Mouth corner
-				image_points.push_back(Point2d(453, 469));	// Right mouth corner
+				vector<Point2f> image_points;
+				image_points.push_back(Point2f(359, 391));	// Nose tip
+				image_points.push_back(Point2f(399, 561));	// Chin
+				image_points.push_back(Point2f(337, 297));	// Left eye left corner
+				image_points.push_back(Point2f(513, 301));	// Right eye right corner
+				image_points.push_back(Point2f(345, 465));	// Left Mouth corner
+				image_points.push_back(Point2f(453, 469));	// Right mouth corner
 
 				// 3D model points.
-				vector<Point3d> model_points;
-				model_points.push_back(Point3d(0.0f, 0.0f, 0.0f));			// Nose tip
-				model_points.push_back(Point3d(0.0f, -330.0f, -65.0f));		// Chin
-				model_points.push_back(Point3d(-225.0f, 170.0f, -135.0f));	// Left eye left corner
-				model_points.push_back(Point3d(225.0f, 170.0f, -135.0f));	// Right eye right corner
-				model_points.push_back(Point3d(-150.0f, -150.0f, -125.0f));	// Left Mouth corner
-				model_points.push_back(Point3d(150.0f, -150.0f, -125.0f));	// Right mouth corner
+				vector<Point3f> model_points;
+				model_points.push_back(Point3f(0.0f, 0.0f, 0.0f));			// Nose tip
+				model_points.push_back(Point3f(0.0f, -330.0f, -65.0f));		// Chin
+				model_points.push_back(Point3f(-225.0f, 170.0f, -135.0f));	// Left eye left corner
+				model_points.push_back(Point3f(225.0f, 170.0f, -135.0f));	// Right eye right corner
+				model_points.push_back(Point3f(-150.0f, -150.0f, -125.0f));	// Left Mouth corner
+				model_points.push_back(Point3f(150.0f, -150.0f, -125.0f));	// Right mouth corner
 
 				// Camera internals
 				double focal_length = im.cols;	// Approximate focal length.
@@ -152,8 +152,8 @@ int main()
 				Mat tvec;
 
 				// Solve for pose
-				solvePnP(model_points, image_points, camera_matrix, dist_coeffs, rvec, tvec);
-				//solvePnP(model_points, image_points, cameraMatrix, distCoeffs, rvec, tvec);
+				//solvePnP(model_points, image_points, camera_matrix, dist_coeffs, rvec, tvec);
+				solvePnP(model_points, image_points, cameraMatrix, distCoeffs, rvec, tvec);
 
 				// Project a 3D point (0, 0, 1000.0) onto the image plane.
 				// We use this to draw a line sticking out of the nose
@@ -281,7 +281,10 @@ void cameraCalibration(vector<Mat> calibrationImages, Size boardSize, float squa
 
 	// The Magic of OpenCV!
 	calibrateCamera(objectPoints, imagePoints, boardSize, cameraMatrix, distCoeffs, rvecs, tvecs);
-	printf("");
+
+	// SOLVEPNP WORKS LIKE THIS!
+	Mat rvec, tvec;
+	solvePnP(objectPoints[0], imagePoints[0], cameraMatrix, distCoeffs, rvec, tvec);
 }
 
 // Save camera calibration matrix into a file
