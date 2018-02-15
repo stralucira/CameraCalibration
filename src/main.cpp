@@ -75,7 +75,7 @@ int main()
 		//cameraMatrix.at<double>(0, 0) = aspectRatio;
 		//cameraMatrix.at<double>(1, 1) = 1.0f;
 
-		vector<Vec2f> pointBuffer;
+		vector<Point2f> pointBuffer;
 		bool patternFound = false;
 		patternFound = findChessboardCorners(cameraFrame, chessboardDimensions, pointBuffer,
 			CV_CALIB_CB_ADAPTIVE_THRESH | CV_CALIB_CB_NORMALIZE_IMAGE);
@@ -119,7 +119,23 @@ int main()
 
 			if (cameraCalibrated)
 			{
-				// Read input image
+				//vector<vector<Point2f>> imagePoints;
+				vector<Point3f> objectPoints;
+
+				calcBoardCornerPositions(chessboardDimensions, calibrationSquareDimension, objectPoints);
+				//objectPoints.resize(imagePoints.size(), objectPoints[0]);
+
+				Mat rvec, tvec;
+				solvePnP(objectPoints, pointBuffer, cameraMatrix, distCoeffs, rvec, tvec);
+
+				// Draw the coordinate axes on the board
+				drawAxis(1, 0, 0, red, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
+				drawAxis(0, 1, 0, green, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
+				drawAxis(0, 0, 1, blue, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
+				drawToFrame = cameraFrame;
+				imshow("Pattern", drawToFrame);
+
+				/*// Read input image
 				Mat im = imread("headPose.jpg");
 
 				// 2D image points. If you change the image, you need to change vector
@@ -178,7 +194,7 @@ int main()
 
 				// Display image.
 				imshow("Output", im);
-				waitKey(0);
+				waitKey(0);*/
 			}
 
 			imshow("Camera", drawToFrame);
@@ -283,8 +299,8 @@ void cameraCalibration(vector<Mat> calibrationImages, Size boardSize, float squa
 	calibrateCamera(objectPoints, imagePoints, boardSize, cameraMatrix, distCoeffs, rvecs, tvecs);
 
 	// SOLVEPNP WORKS LIKE THIS!
-	Mat rvec, tvec;
-	solvePnP(objectPoints[0], imagePoints[0], cameraMatrix, distCoeffs, rvec, tvec);
+	//Mat rvec, tvec;
+	//solvePnP(objectPoints[0], imagePoints[0], cameraMatrix, distCoeffs, rvec, tvec);
 }
 
 // Save camera calibration matrix into a file
