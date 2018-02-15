@@ -17,6 +17,7 @@ void calcBoardCornerPositions(Size boardSize, float squareSize, vector<Point3f>&
 void getChessboardCorners(vector<Mat> images, vector<vector<Point2f>>& allFoundCorners, bool showResults);
 void cameraCalibration(vector<Mat> calibrationImages, Size boardSize, float squareSize, Mat& cameraMatrix, Mat& distCoeffs);
 bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distanceCoefficients);
+void drawAxis(float x, float y, float z, Scalar color, Mat rvec, Mat tvec, Mat &cameraMatrix, Mat &distCoeffs, Mat &image);
 
 // Real world chessboard square size in meters
 const float calibrationSquareDimension = 0.01905f;
@@ -27,17 +28,18 @@ int boardCount = 4; // Number of boards to be found before calibration.
 
 int main()
 {
-	/*const Scalar red = Scalar(255, 0, 0);
+	bool cameraCalibrated = false;
+
+	const Scalar red = Scalar(255, 0, 0);
 	const Scalar green = Scalar(0, 255, 0);
 	const Scalar blue = Scalar(0, 0, 255);
 
-	float aspectRatio = 16.0f / 9.0f;
+	/*float aspectRatio = 16.0f / 9.0f;
 	float squareSize = 1.0f;
-	
 	int successes = 0;*/
 
 	// Create a 3x3 identity matrix
-	Mat cameraMatrix = Mat::eye(3, 3, CV_64F);
+	Mat cameraMatrix = Mat(3, 3, CV_64F);
 
 	// Distortion coefficients of 8 elements
 	Mat distCoeffs;
@@ -89,8 +91,6 @@ int main()
 		{	
 			putText(drawToFrame, "Pattern found", cvPoint(30, 30),
 				FONT_HERSHEY_COMPLEX_SMALL, 0.8, cvScalar(200, 200, 250), 1, CV_AA);
-			
-			imshow("Camera", drawToFrame);
 
 			//cvtColor(cameraFrame, cameraFrame_bw, CV_BGR2GRAY);
 			//cornerSubPix(cameraFrame_bw, pointBuffer, Size(11, 11), Size(-1, -1), TermCriteria(CV_TERMCRIT_EPS | CV_TERMCRIT_ITER, 30, 0.1));
@@ -116,6 +116,72 @@ int main()
 			//drawAxis(0, 0, 1, blue, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
 			//drawnFrame = cameraFrame;
 			//imshow("Pattern", drawnFrame);
+
+			if (cameraCalibrated)
+			{
+				// Read input image
+				Mat im = imread("headPose.jpg");
+
+				// 2D image points. If you change the image, you need to change vector
+				vector<Point2d> image_points;
+				image_points.push_back(Point2d(359, 391));	// Nose tip
+				image_points.push_back(Point2d(399, 561));	// Chin
+				image_points.push_back(Point2d(337, 297));	// Left eye left corner
+				image_points.push_back(Point2d(513, 301));	// Right eye right corner
+				image_points.push_back(Point2d(345, 465));	// Left Mouth corner
+				image_points.push_back(Point2d(453, 469));	// Right mouth corner
+
+				// 3D model points.
+				vector<Point3d> model_points;
+				model_points.push_back(Point3d(0.0f, 0.0f, 0.0f));			// Nose tip
+				model_points.push_back(Point3d(0.0f, -330.0f, -65.0f));		// Chin
+				model_points.push_back(Point3d(-225.0f, 170.0f, -135.0f));	// Left eye left corner
+				model_points.push_back(Point3d(225.0f, 170.0f, -135.0f));	// Right eye right corner
+				model_points.push_back(Point3d(-150.0f, -150.0f, -125.0f));	// Left Mouth corner
+				model_points.push_back(Point3d(150.0f, -150.0f, -125.0f));	// Right mouth corner
+
+				// Camera internals
+				double focal_length = im.cols;	// Approximate focal length.
+				Point2d center = Point2d(im.cols / 2, im.rows / 2);
+				Mat camera_matrix = (Mat_<double>(3, 3) << focal_length, 0, center.x, 0, focal_length, center.y, 0, 0, 1);
+				Mat dist_coeffs = Mat::zeros(4, 1, DataType<double>::type);	// Assuming no lens distortion
+
+				cout << "Camera Matrix " << endl << camera_matrix << endl;
+				// Output rotation and translation
+				Mat rvec; // Rotation in axis-angle form
+				Mat tvec;
+
+				// Solve for pose
+				solvePnP(model_points, image_points, camera_matrix, dist_coeffs, rvec, tvec);
+				//solvePnP(model_points, image_points, cameraMatrix, distCoeffs, rvec, tvec);
+
+				// Project a 3D point (0, 0, 1000.0) onto the image plane.
+				// We use this to draw a line sticking out of the nose
+
+				vector<Point3d> nose_end_point3D;
+				vector<Point2d> nose_end_point2D;
+				nose_end_point3D.push_back(Point3d(0, 0, 1000.0));
+
+				projectPoints(nose_end_point3D, rvec, tvec, camera_matrix, dist_coeffs, nose_end_point2D);
+
+				for (int i = 0; i < image_points.size(); i++)
+				{
+					circle(im, image_points[i], 3, Scalar(0, 0, 255), -1);
+				}
+
+				line(im, image_points[0], nose_end_point2D[0], Scalar(255, 0, 0), 2);
+
+				cout << "Rotation Vector " << endl << rvec << endl;
+				cout << "Translation Vector" << endl << tvec << endl;
+
+				cout << nose_end_point2D << endl;
+
+				// Display image.
+				imshow("Output", im);
+				waitKey(0);
+			}
+
+			imshow("Camera", drawToFrame);
 		}
 		else
 		{
@@ -137,10 +203,11 @@ int main()
 			break;
 		case 13:
 			// Start camera calibration if there are over 15 valid images
-			if (savedImages.size() > 15)
+			if (savedImages.size() > 3)
 			{
 				cameraCalibration(savedImages, chessboardDimensions, calibrationSquareDimension, cameraMatrix, distCoeffs);
 				saveCameraCalibration("CalibratedCamera", cameraMatrix, distCoeffs);
+				cameraCalibrated = true;
 			}
 			break;
 		case 27:
@@ -206,13 +273,15 @@ void cameraCalibration(vector<Mat> calibrationImages, Size boardSize, float squa
 	calcBoardCornerPositions(boardSize, squareSize, objectPoints[0]);
 	objectPoints.resize(imagePoints.size(), objectPoints[0]);
 
-	// Radial vectors and tangential vectors
+	// Radial vectors and tangential vectors?
+	// Rotation vectors and translation vectors?
 	vector<Mat> rvecs, tvecs;
-	// Distance coefficients of 8 elements
+	// Distortion coefficients of 8 elements
 	distCoeffs = Mat::zeros(8, 1, CV_64F);
 
 	// The Magic of OpenCV!
 	calibrateCamera(objectPoints, imagePoints, boardSize, cameraMatrix, distCoeffs, rvecs, tvecs);
+	printf("");
 }
 
 // Save camera calibration matrix into a file
@@ -252,13 +321,14 @@ bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distCoeffs)
 	return false;
 }
 
-void drawAxis(float x, float y, float z, Scalar color, Mat rvec, Mat tvec, Mat &cameraMatrix, Mat &distCoeffs, Mat &image) {
-	std::vector<cv::Point3f> points;
-	std::vector<cv::Point2f> projectedPoints;
+void drawAxis(float x, float y, float z, Scalar color, Mat rvec, Mat tvec, Mat &cameraMatrix, Mat &distCoeffs, Mat &image)
+{
+	vector<Point3f> points;
+	vector<Point2f> projectedPoints;
 
 	//fills input array with 2 points
-	points.push_back(cv::Point3f(0, 0, 0));
-	points.push_back(cv::Point3f(x, y, z));
+	points.push_back(Point3f(0, 0, 0));
+	points.push_back(Point3f(x, y, z));
 
 	//projects points using projectPoints method
 	projectPoints(points, rvec, tvec, cameraMatrix, distCoeffs, projectedPoints);
