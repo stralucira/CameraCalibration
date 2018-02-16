@@ -9,6 +9,11 @@
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgcodecs.hpp>
 
+#define RED		Scalar(255, 0, 0)
+#define GREEN	Scalar(0, 255, 0)
+#define BLUE	Scalar(0, 0, 255)
+#define WHITE	Scalar(255, 255, 255)
+#define ORIGIN	Point3f(0.f)
 
 using namespace cv;
 using namespace std;
@@ -20,7 +25,7 @@ bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distanceCoefficien
 void drawAxis(float x, float y, float z, Scalar color, Mat rvec, Mat tvec, Mat &cameraMatrix, Mat &distCoeffs, Mat &image);
 void drawCube(float length, Mat rvec, Mat tvec, Mat& cameraMatrix, Mat& distCoeffs, Mat& image);
 
-// Real world chessboard square size in meters
+// Real world chessboard square length in meters
 const float calibrationSquareDimension = 0.025f;
 // Considering the aspect ratio is fixed (CALIB_FIX_ASPECT_RATIO) set fx/fy
 const Size chessboardDimensions = Size(6, 9);
@@ -30,10 +35,6 @@ int boardCount = 4; // Number of boards to be found before calibration.
 int main()
 {
 	bool cameraCalibrated = false;
-
-	const Scalar red = Scalar(255, 0, 0);
-	const Scalar green = Scalar(0, 255, 0);
-	const Scalar blue = Scalar(0, 0, 255);
 
 	// Create a 3x3 identity matrix
 	Mat cameraMatrix = Mat(3, 3, CV_64F);
@@ -49,6 +50,7 @@ int main()
 
 	VideoCapture stream1(0);
 	Mat cameraFrame;
+	Mat cameraFrameUndistorted;
 	///Mat cameraFrame_bw;
 	Mat drawToFrame;
 
@@ -82,7 +84,7 @@ int main()
 		// Drawing routine
 		if (patternFound)
 		{	
-			putText(drawToFrame, "Pattern found. Press Space to save. " + to_string(savedImages.size()) + " /4.", cvPoint(30, 30),
+			putText(drawToFrame, "Pattern found. Press Space to save. " + to_string(savedImages.size()) + " /" + to_string(boardCount) + ".", cvPoint(30, 30),
 				FONT_HERSHEY_COMPLEX_SMALL, 0.8, cvScalar(200, 200, 250), 1, CV_AA);
 
 			if (cameraCalibrated)
@@ -97,20 +99,30 @@ int main()
 				solvePnP(objectPoints, pointBuffer, cameraMatrix, distCoeffs, rvec, tvec);
 
 				// Draw the coordinate axes on the board
-				drawAxis(0.1f, 0.0f, 0.0f, red, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
-				drawAxis(0.0f, 0.1f, 0.0f, green, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
-				drawAxis(0.0f, 0.0f, 0.1f, blue, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
+				drawAxis(0.1f, 0.0f, 0.0f, RED, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
+				drawAxis(0.0f, 0.1f, 0.0f, GREEN, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
+				drawAxis(0.0f, 0.0f, 0.1f, BLUE, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
 
 				// Draw a cube from the origin
 				drawCube(0.05f, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
 				
-				drawToFrame = cameraFrame;
+				// Remove camera distortion
+				undistort(cameraFrame, drawToFrame, cameraMatrix, distCoeffs);
+				//drawToFrame = cameraFrame;
 			}
 			imshow("Camera", drawToFrame);
 		}
 		else
 		{
-			imshow("Camera", cameraFrame);
+			if (cameraCalibrated)
+			{
+				undistort(cameraFrame, cameraFrameUndistorted, cameraMatrix, distCoeffs);
+				imshow("Camera", cameraFrameUndistorted);
+			}
+			else
+			{
+				imshow("Camera", cameraFrame);
+			}
 		}
 		
 		// Input handling
@@ -127,8 +139,8 @@ int main()
 			}
 			break;
 		case 13:
-			// Start camera calibration if there are over 15 valid images
-			if (savedImages.size() > 3)
+			// Start camera calibration if there are over boardCount valid images
+			if (savedImages.size() >= boardCount)
 			{
 				cameraCalibration(savedImages, chessboardDimensions, calibrationSquareDimension, cameraMatrix, distCoeffs);
 				saveCameraCalibration("CalibratedCamera", cameraMatrix, distCoeffs);
@@ -250,7 +262,7 @@ void drawAxis(float x, float y, float z, Scalar color, Mat rvec, Mat tvec, Mat& 
 	vector<Point2f> projectedPoints;
 
 	//fills input array with 2 points
-	points.push_back(Point3f(0.f, 0.f, 0.f));
+	points.push_back(ORIGIN);
 	points.push_back(Point3f(x, y, -z));
 
 	//projects points using projectPoints method
@@ -277,21 +289,19 @@ void drawCube(float length, Mat rvec, Mat tvec, Mat& cameraMatrix, Mat& distCoef
 
 	projectPoints(points, rvec, tvec, cameraMatrix, distCoeffs, projectedPoints);
 
-	//rectangle(image, projectedPoints[0], projectedPoints[7], Scalar(255, 255, 255));
-	
-	line(image, projectedPoints[0], projectedPoints[1], Scalar(255, 255, 255));
-	line(image, projectedPoints[1], projectedPoints[2], Scalar(255, 255, 255));
-	line(image, projectedPoints[2], projectedPoints[3], Scalar(255, 255, 255));
-	line(image, projectedPoints[3], projectedPoints[0], Scalar(255, 255, 255));
+	line(image, projectedPoints[0], projectedPoints[1], WHITE);
+	line(image, projectedPoints[1], projectedPoints[2], WHITE);
+	line(image, projectedPoints[2], projectedPoints[3], WHITE);
+	line(image, projectedPoints[3], projectedPoints[0], WHITE);
 
-	line(image, projectedPoints[4], projectedPoints[5], Scalar(255, 255, 255));
-	line(image, projectedPoints[5], projectedPoints[6], Scalar(255, 255, 255));
-	line(image, projectedPoints[6], projectedPoints[7], Scalar(255, 255, 255));
-	line(image, projectedPoints[7], projectedPoints[4], Scalar(255, 255, 255));
+	line(image, projectedPoints[4], projectedPoints[5], WHITE);
+	line(image, projectedPoints[5], projectedPoints[6], WHITE);
+	line(image, projectedPoints[6], projectedPoints[7], WHITE);
+	line(image, projectedPoints[7], projectedPoints[4], WHITE);
 
-	line(image, projectedPoints[0], projectedPoints[4], Scalar(255, 255, 255));
-	line(image, projectedPoints[1], projectedPoints[5], Scalar(255, 255, 255));
-	line(image, projectedPoints[2], projectedPoints[6], Scalar(255, 255, 255));
-	line(image, projectedPoints[3], projectedPoints[7], Scalar(255, 255, 255));
+	line(image, projectedPoints[0], projectedPoints[4], WHITE);
+	line(image, projectedPoints[1], projectedPoints[5], WHITE);
+	line(image, projectedPoints[2], projectedPoints[6], WHITE);
+	line(image, projectedPoints[3], projectedPoints[7], WHITE);
 
 }
