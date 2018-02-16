@@ -18,9 +18,10 @@ void getChessboardCorners(vector<Mat> images, vector<vector<Point2f>>& allFoundC
 void cameraCalibration(vector<Mat> calibrationImages, Size boardSize, float squareSize, Mat& cameraMatrix, Mat& distCoeffs);
 bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distanceCoefficients);
 void drawAxis(float x, float y, float z, Scalar color, Mat rvec, Mat tvec, Mat &cameraMatrix, Mat &distCoeffs, Mat &image);
+void drawCube(float length, Mat rvec, Mat tvec, Mat& cameraMatrix, Mat& distCoeffs, Mat& image);
 
 // Real world chessboard square size in meters
-const float calibrationSquareDimension = 0.01905f;
+const float calibrationSquareDimension = 0.025f;
 // Considering the aspect ratio is fixed (CALIB_FIX_ASPECT_RATIO) set fx/fy
 const Size chessboardDimensions = Size(6, 9);
 
@@ -59,7 +60,7 @@ int main()
 	int framesPerSecond = 20;
 
 	namedWindow("Camera", CV_WINDOW_AUTOSIZE);
-	namedWindow("Drawing", CV_WINDOW_AUTOSIZE);
+	//namedWindow("Drawing", CV_WINDOW_AUTOSIZE);
 
 	// Try to find the chessboard pattern from the camera
 	while (true)
@@ -96,14 +97,16 @@ int main()
 				solvePnP(objectPoints, pointBuffer, cameraMatrix, distCoeffs, rvec, tvec);
 
 				// Draw the coordinate axes on the board
-				drawAxis(0.1, 0, 0, red, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
-				drawAxis(0, 0.1, 0, green, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
-				drawAxis(0, 0, 0.1, blue, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
-				drawToFrame = cameraFrame;
+				drawAxis(0.1f, 0.0f, 0.0f, red, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
+				drawAxis(0.0f, 0.1f, 0.0f, green, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
+				drawAxis(0.0f, 0.0f, 0.1f, blue, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
 
-				imshow("Camera", drawToFrame);
+				// Draw a cube from the origin
+				drawCube(0.05f, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
+				
+				drawToFrame = cameraFrame;
 			}
-			imshow("Drawing", drawToFrame);
+			imshow("Camera", drawToFrame);
 		}
 		else
 		{
@@ -138,9 +141,6 @@ int main()
 			break;
 		}
 	}
-
-	//double rms = calibrateCamera(objectPoints, imagePoints, cameraFrame.size(), cameraMatrix, distCoeffs, rvecs, tvecs, CV_CALIB_USE_INTRINSIC_GUESS);
-	//cout << "Re-projection error reported by calibrateCamera: " << rms << endl;
 
 	return 0;
 }
@@ -203,10 +203,8 @@ void cameraCalibration(vector<Mat> calibrationImages, Size boardSize, float squa
 
 	// The Magic of OpenCV!
 	calibrateCamera(objectPoints, imagePoints, boardSize, cameraMatrix, distCoeffs, rvecs, tvecs);
-
-	// SOLVEPNP WORKS LIKE THIS!
-	//Mat rvec, tvec;
-	//solvePnP(objectPoints[0], imagePoints[0], cameraMatrix, distCoeffs, rvec, tvec);
+	//double rms = calibrateCamera(objectPoints, imagePoints, boardSize, cameraMatrix, distCoeffs, rvecs, tvecs, CV_CALIB_USE_INTRINSIC_GUESS);
+	//cout << "Re-projection error reported by calibrateCamera: " << rms << endl;
 }
 
 // Save camera calibration matrix into a file
@@ -246,18 +244,54 @@ bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distCoeffs)
 	return false;
 }
 
-void drawAxis(float x, float y, float z, Scalar color, Mat rvec, Mat tvec, Mat &cameraMatrix, Mat &distCoeffs, Mat &image)
+void drawAxis(float x, float y, float z, Scalar color, Mat rvec, Mat tvec, Mat& cameraMatrix, Mat& distCoeffs, Mat& image)
 {
 	vector<Point3f> points;
 	vector<Point2f> projectedPoints;
 
 	//fills input array with 2 points
-	points.push_back(Point3f(0, 0, 0));
-	points.push_back(Point3f(x, y, z));
+	points.push_back(Point3f(0.f, 0.f, 0.f));
+	points.push_back(Point3f(x, y, -z));
 
 	//projects points using projectPoints method
 	projectPoints(points, rvec, tvec, cameraMatrix, distCoeffs, projectedPoints);
 
 	//draws corresponding line
 	arrowedLine(image, projectedPoints[0], projectedPoints[1], color);
+}
+
+void drawCube(float length, Mat rvec, Mat tvec, Mat& cameraMatrix, Mat& distCoeffs, Mat& image)
+{
+	vector<Point3f> points;
+	vector<Point2f> projectedPoints;
+
+	points.push_back(Point3f(0.f,    0.f,    0.f)); // Point 0
+	points.push_back(Point3f(length, 0.f,    0.f)); // Point 1
+	points.push_back(Point3f(length, length, 0.f)); // Point 2
+	points.push_back(Point3f(0.f,    length, 0.f)); // Point 3
+
+	points.push_back(Point3f(0.f,    0.f,    -length)); // Point 4
+	points.push_back(Point3f(length, 0.f,    -length)); // Point 5
+	points.push_back(Point3f(length, length, -length)); // Point 6
+	points.push_back(Point3f(0.f,    length, -length)); // Point 7
+
+	projectPoints(points, rvec, tvec, cameraMatrix, distCoeffs, projectedPoints);
+
+	//rectangle(image, projectedPoints[0], projectedPoints[7], Scalar(255, 255, 255));
+	
+	line(image, projectedPoints[0], projectedPoints[1], Scalar(255, 255, 255));
+	line(image, projectedPoints[1], projectedPoints[2], Scalar(255, 255, 255));
+	line(image, projectedPoints[2], projectedPoints[3], Scalar(255, 255, 255));
+	line(image, projectedPoints[3], projectedPoints[0], Scalar(255, 255, 255));
+
+	line(image, projectedPoints[4], projectedPoints[5], Scalar(255, 255, 255));
+	line(image, projectedPoints[5], projectedPoints[6], Scalar(255, 255, 255));
+	line(image, projectedPoints[6], projectedPoints[7], Scalar(255, 255, 255));
+	line(image, projectedPoints[7], projectedPoints[4], Scalar(255, 255, 255));
+
+	line(image, projectedPoints[0], projectedPoints[4], Scalar(255, 255, 255));
+	line(image, projectedPoints[1], projectedPoints[5], Scalar(255, 255, 255));
+	line(image, projectedPoints[2], projectedPoints[6], Scalar(255, 255, 255));
+	line(image, projectedPoints[3], projectedPoints[7], Scalar(255, 255, 255));
+
 }
