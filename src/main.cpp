@@ -22,20 +22,24 @@ void calcBoardCornerPositions(Size boardSize, float squareSize, vector<Point3f>&
 void getChessboardCorners(vector<Mat> images, vector<vector<Point2f>>& allFoundCorners, bool showResults);
 void cameraCalibration(vector<Mat> calibrationImages, Size boardSize, float squareSize, Mat& cameraMatrix, Mat& distCoeffs);
 bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distanceCoefficients);
+bool loadCameraCalibration(string name, Mat& cameraMatrix, Mat& distCoeffs);
 void drawAxis(float x, float y, float z, Scalar color, Mat rvec, Mat tvec, Mat &cameraMatrix, Mat &distCoeffs, Mat &image);
-void drawCube(float length, Mat rvec, Mat tvec, Mat& cameraMatrix, Mat& distCoeffs, Mat& image);
+void drawCube(float length, int thickness, Scalar color, Mat rvec, Mat tvec, Mat& cameraMatrix, Mat& distCoeffs, Mat& image);
 
 // Real world chessboard square length in meters
-const float calibrationSquareDimension = 0.025f;
+const float calibrationSquareDimension = 0.025f; // paper chessboard length size
+//const float calibrationSquareDimension = 0.0059f; // iPod chessboard length size
+
 // Considering the aspect ratio is fixed (CALIB_FIX_ASPECT_RATIO) set fx/fy
 const Size chessboardDimensions = Size(6, 9);
 
+bool cameraUndistorted = true;	// Toggle camera distortion fix
+bool cameraCalibrated = false;
+int framesPerSecond = 20;
 int boardCount = 4; // Number of boards to be found before calibration.
 
 int main()
 {
-	bool cameraCalibrated = false;
-
 	// Create a 3x3 identity matrix
 	Mat cameraMatrix = Mat(3, 3, CV_64F);
 
@@ -45,13 +49,11 @@ int main()
 	// Manually save a good calibrated image
 	vector<Mat> savedImages;
 
-	// Points that are found
-	vector<vector<Point2f>> markerCorners, rejectedCandidates;
-
+	// Start video capture and initialize image containers
 	VideoCapture stream1(0);
 	Mat cameraFrame;
+	Mat cameraFrame_bw;
 	Mat cameraFrameUndistorted;
-	///Mat cameraFrame_bw;
 	Mat drawToFrame;
 
 	if (!stream1.isOpened()) // Check if video device is initialised
@@ -59,10 +61,9 @@ int main()
 		cout << "cannot open camera";
 	}
 
-	int framesPerSecond = 20;
-
+	// Create windows
 	namedWindow("Camera", CV_WINDOW_AUTOSIZE);
-	//namedWindow("Drawing", CV_WINDOW_AUTOSIZE);
+	moveWindow("Camera", 50, 50);
 
 	// Try to find the chessboard pattern from the camera
 	while (true)
@@ -76,25 +77,25 @@ int main()
 		
 		cameraFrame.copyTo(drawToFrame);
 
+		// Draw chessboard corners
 		if (!cameraCalibrated)
 		{
 			drawChessboardCorners(drawToFrame, chessboardDimensions, pointBuffer, patternFound);
 		}
 		
 		// Drawing routine
-		if (patternFound)
+		if (patternFound) // If chessboard is detected
 		{	
-			putText(drawToFrame, "Pattern found. Press Space to save. " + to_string(savedImages.size()) + " /" + to_string(boardCount) + ".", cvPoint(30, 30),
-				FONT_HERSHEY_COMPLEX_SMALL, 0.8, cvScalar(200, 200, 250), 1, CV_AA);
+			// Canny edge detector, improves accuracy
+			cvtColor(cameraFrame, cameraFrame_bw, CV_BGR2GRAY);
+			cornerSubPix(cameraFrame_bw, pointBuffer, Size(11, 11), Size(-1, -1), TermCriteria(CV_TERMCRIT_EPS | CV_TERMCRIT_ITER, 30, 0.1));
 
 			if (cameraCalibrated)
 			{
-				//vector<vector<Point2f>> imagePoints;
 				vector<Point3f> objectPoints;
-
 				calcBoardCornerPositions(chessboardDimensions, calibrationSquareDimension, objectPoints);
-				//objectPoints.resize(imagePoints.size(), objectPoints[0]);
 
+				// Finds an object pose from 3D-2D point correspondences, calculating the rotation and translation vector
 				Mat rvec, tvec;
 				solvePnP(objectPoints, pointBuffer, cameraMatrix, distCoeffs, rvec, tvec);
 
@@ -104,17 +105,31 @@ int main()
 				drawAxis(0.0f, 0.0f, 0.1f, BLUE, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
 
 				// Draw a cube from the origin
-				drawCube(0.05f, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
+				drawCube(0.05f, 2, WHITE, rvec, tvec, cameraMatrix, distCoeffs, cameraFrame);
 				
 				// Remove camera distortion
-				undistort(cameraFrame, drawToFrame, cameraMatrix, distCoeffs);
-				//drawToFrame = cameraFrame;
+				if (cameraUndistorted)
+				{
+					undistort(cameraFrame, cameraFrameUndistorted, cameraMatrix, distCoeffs);
+					drawToFrame = cameraFrameUndistorted;
+				}
+				else
+				{
+					drawToFrame = cameraFrame;
+				}
 			}
+			
+			if (!cameraCalibrated)
+			{
+				putText(drawToFrame, "Pattern found. Press Space to save. " + to_string(savedImages.size()) + " /" + to_string(boardCount) + ".", cvPoint(30, 30),
+					FONT_HERSHEY_COMPLEX_SMALL, 0.6, cvScalar(200, 200, 250), 1, CV_AA);
+			}
+
 			imshow("Camera", drawToFrame);
 		}
-		else
+		else // Let through unprocessed camera stream
 		{
-			if (cameraCalibrated)
+			if (cameraCalibrated && cameraUndistorted)
 			{
 				undistort(cameraFrame, cameraFrameUndistorted, cameraMatrix, distCoeffs);
 				imshow("Camera", cameraFrameUndistorted);
@@ -129,7 +144,7 @@ int main()
 		char character = waitKey(1000 / framesPerSecond);
 		switch (character)
 		{
-		case ' ':
+		case 32: ///Space
 			// Save image if pattern is found
 			if (patternFound)
 			{
@@ -138,7 +153,7 @@ int main()
 				savedImages.push_back(temp);
 			}
 			break;
-		case 13:
+		case 13: ///Enter
 			// Start camera calibration if there are over boardCount valid images
 			if (savedImages.size() >= boardCount)
 			{
@@ -147,7 +162,22 @@ int main()
 				cameraCalibrated = true;
 			}
 			break;
-		case 27:
+		case 'l':
+			// Load camera calibration data from file
+			loadCameraCalibration("CalibratedCamera", cameraMatrix, distCoeffs);
+			cameraCalibrated = true;
+			break;
+		case 'r':
+			// Reset camera calibration
+			cameraMatrix = Mat(3, 3, CV_64F);
+			distCoeffs = Mat::zeros(8, 1, CV_64F);
+			cameraCalibrated = false;
+			break;
+		case 'd':
+			// Toggle distortion
+			cameraUndistorted = !cameraUndistorted;
+			break;
+		case 27: ///Escape
 			// Exit
 			return 0;
 			break;
@@ -207,8 +237,7 @@ void cameraCalibration(vector<Mat> calibrationImages, Size boardSize, float squa
 	calcBoardCornerPositions(boardSize, squareSize, objectPoints[0]);
 	objectPoints.resize(imagePoints.size(), objectPoints[0]);
 
-	// Radial vectors and tangential vectors?
-	// Rotation vectors and translation vectors?
+	// Rotation vectors and translation vectors
 	vector<Mat> rvecs, tvecs;
 	// Distortion coefficients of 8 elements
 	distCoeffs = Mat::zeros(8, 1, CV_64F);
@@ -225,8 +254,12 @@ bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distCoeffs)
 	ofstream outStream(name);
 	if (outStream)
 	{
+		// Camera matrix
 		uint16_t rows = cameraMatrix.rows;
 		uint16_t columns = cameraMatrix.cols;
+
+		outStream << rows << endl;
+		outStream << columns << endl;
 
 		for (int r = 0; r < rows; r++)
 		{
@@ -237,8 +270,12 @@ bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distCoeffs)
 			}
 		}
 
+		// Distortion coefficients
 		rows = distCoeffs.rows;
 		columns = distCoeffs.cols;
+
+		outStream << rows << endl;
+		outStream << columns << endl;
 
 		for (int r = 0; r < rows; r++)
 		{
@@ -256,27 +293,78 @@ bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distCoeffs)
 	return false;
 }
 
+// Load camera calibration matrix from a file
+bool loadCameraCalibration(string name, Mat& cameraMatrix, Mat& distCoeffs)
+{
+	ifstream inStream(name);
+	if (inStream)
+	{
+		uint16_t rows;
+		uint16_t columns;
+
+		// Camera matrix
+		inStream >> rows;
+		inStream >> columns;
+
+		cameraMatrix = Mat(Size(columns, rows), CV_64F);
+
+		for (int r = 0; r < rows; r++)
+		{
+			for (int c = 0; c < columns; c++)
+			{
+				double value = 0.0f;
+				inStream >> value;
+				cameraMatrix.at<double>(r, c) = value;
+				cout << cameraMatrix.at<double>(r, c) << "\n";
+			}
+		}
+
+		// Distortion coefficients
+		inStream >> rows;
+		inStream >> columns;
+
+		distCoeffs = Mat::zeros(rows, columns, CV_64F);
+
+		for (int r = 0; r < rows; r++)
+		{
+			for (int c = 0; c < columns; c++)
+			{
+				double value = 0.0f;
+				inStream >> value;
+				distCoeffs.at<double>(r, c) = value;
+				cout << distCoeffs.at<double>(r, c) << "\n";
+			}
+		}
+
+		inStream.close();
+		return true;
+	}
+	
+	return false;
+}
+
 void drawAxis(float x, float y, float z, Scalar color, Mat rvec, Mat tvec, Mat& cameraMatrix, Mat& distCoeffs, Mat& image)
 {
 	vector<Point3f> points;
 	vector<Point2f> projectedPoints;
 
-	//fills input array with 2 points
+	// Fills input array with 2 points
 	points.push_back(ORIGIN);
 	points.push_back(Point3f(x, y, -z));
 
-	//projects points using projectPoints method
+	// Projects points using projectPoints method
 	projectPoints(points, rvec, tvec, cameraMatrix, distCoeffs, projectedPoints);
 
-	//draws corresponding line
+	// Draws corresponding line
 	arrowedLine(image, projectedPoints[0], projectedPoints[1], color);
 }
 
-void drawCube(float length, Mat rvec, Mat tvec, Mat& cameraMatrix, Mat& distCoeffs, Mat& image)
+void drawCube(float length, int thickness, Scalar color, Mat rvec, Mat tvec, Mat& cameraMatrix, Mat& distCoeffs, Mat& image)
 {
 	vector<Point3f> points;
 	vector<Point2f> projectedPoints;
 
+	// Declare cube points from the origin
 	points.push_back(Point3f(0.f,    0.f,    0.f)); // Point 0
 	points.push_back(Point3f(length, 0.f,    0.f)); // Point 1
 	points.push_back(Point3f(length, length, 0.f)); // Point 2
@@ -287,21 +375,22 @@ void drawCube(float length, Mat rvec, Mat tvec, Mat& cameraMatrix, Mat& distCoef
 	points.push_back(Point3f(length, length, -length)); // Point 6
 	points.push_back(Point3f(0.f,    length, -length)); // Point 7
 
+	// Projects points using projectPoints method
 	projectPoints(points, rvec, tvec, cameraMatrix, distCoeffs, projectedPoints);
 
-	line(image, projectedPoints[0], projectedPoints[1], WHITE);
-	line(image, projectedPoints[1], projectedPoints[2], WHITE);
-	line(image, projectedPoints[2], projectedPoints[3], WHITE);
-	line(image, projectedPoints[3], projectedPoints[0], WHITE);
+	// Create lines from cube points
+	line(image, projectedPoints[0], projectedPoints[1], color, thickness);
+	line(image, projectedPoints[1], projectedPoints[2], color, thickness);
+	line(image, projectedPoints[2], projectedPoints[3], color, thickness);
+	line(image, projectedPoints[3], projectedPoints[0], color, thickness);
 
-	line(image, projectedPoints[4], projectedPoints[5], WHITE);
-	line(image, projectedPoints[5], projectedPoints[6], WHITE);
-	line(image, projectedPoints[6], projectedPoints[7], WHITE);
-	line(image, projectedPoints[7], projectedPoints[4], WHITE);
+	line(image, projectedPoints[4], projectedPoints[5], color, thickness);
+	line(image, projectedPoints[5], projectedPoints[6], color, thickness);
+	line(image, projectedPoints[6], projectedPoints[7], color, thickness);
+	line(image, projectedPoints[7], projectedPoints[4], color, thickness);
 
-	line(image, projectedPoints[0], projectedPoints[4], WHITE);
-	line(image, projectedPoints[1], projectedPoints[5], WHITE);
-	line(image, projectedPoints[2], projectedPoints[6], WHITE);
-	line(image, projectedPoints[3], projectedPoints[7], WHITE);
-
+	line(image, projectedPoints[0], projectedPoints[4], color, thickness);
+	line(image, projectedPoints[1], projectedPoints[5], color, thickness);
+	line(image, projectedPoints[2], projectedPoints[6], color, thickness);
+	line(image, projectedPoints[3], projectedPoints[7], color, thickness);
 }
