@@ -1,3 +1,11 @@
+/** 
+	UU-INFOMCV 2018
+	Assignment 1 - Camera Geometric Calibration
+
+	Satwiko Wirawan Indrawanto - 6201539
+	Basar Oguz - 6084990
+*/
+
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -30,17 +38,17 @@ void drawCube(float length, int thickness, Scalar color, Mat rvec, Mat tvec, Mat
 const float calibrationSquareDimension = 0.025f; // paper chessboard length size
 //const float calibrationSquareDimension = 0.0059f; // iPod chessboard length size
 
-// Considering the aspect ratio is fixed (CALIB_FIX_ASPECT_RATIO) set fx/fy
+// The inner corner counts of the chessboard pattern that will be used for calibration
 const Size chessboardDimensions = Size(6, 9);
 
 bool cameraUndistorted = true;	// Toggle camera distortion fix
 bool cameraCalibrated = false;
 int framesPerSecond = 20;
-int boardCount = 4; // Number of boards to be found before calibration.
+int boardCount = 8; // Number of boards to be found before calibration.
 
 int main()
 {
-	// Create a 3x3 identity matrix
+	// Create a 3x3 identity matrix to be used as the cameraMatrix
 	Mat cameraMatrix = Mat(3, 3, CV_64F);
 
 	// Distortion coefficients of 8 elements
@@ -77,14 +85,14 @@ int main()
 		
 		cameraFrame.copyTo(drawToFrame);
 
-		// Draw chessboard corners
+		// Draw chessboard corners if the camera is not yet calibrated
 		if (!cameraCalibrated)
 		{
 			drawChessboardCorners(drawToFrame, chessboardDimensions, pointBuffer, patternFound);
 		}
 		
-		// Drawing routine
-		if (patternFound) // If chessboard is detected
+		// If chessboard is detected in the current frame
+		if (patternFound) 
 		{	
 			// Canny edge detector, improves accuracy
 			cvtColor(cameraFrame, cameraFrame_bw, CV_BGR2GRAY);
@@ -145,7 +153,7 @@ int main()
 		switch (character)
 		{
 		case 32: ///Space
-			// Save image if pattern is found
+			// Save image if pattern is found (to be later used for calibration)
 			if (patternFound)
 			{
 				Mat temp;
@@ -154,7 +162,7 @@ int main()
 			}
 			break;
 		case 13: ///Enter
-			// Start camera calibration if there are over boardCount valid images
+			// Start camera calibration Enter is pressed and there are over boardCount valid image
 			if (savedImages.size() >= boardCount)
 			{
 				cameraCalibration(savedImages, chessboardDimensions, calibrationSquareDimension, cameraMatrix, distCoeffs);
@@ -162,7 +170,7 @@ int main()
 				cameraCalibrated = true;
 			}
 			break;
-		case 'l':
+		case 'l': 
 			// Load camera calibration data from file
 			loadCameraCalibration("CalibratedCamera", cameraMatrix, distCoeffs);
 			cameraCalibrated = true;
@@ -200,7 +208,7 @@ void calcBoardCornerPositions(Size boardSize, float squareSize, vector<Point3f>&
 	}
 }
 
-// Extract chessboard corners that have been detected from image
+// Extract 2D chessboard corner coordinates that have been detected from image plane.
 void getChessboardCorners(vector<Mat> images, vector<vector<Point2f>>& allFoundCorners, bool showResults = false)
 {
 	// Iterate vector of images
@@ -227,7 +235,7 @@ void getChessboardCorners(vector<Mat> images, vector<vector<Point2f>>& allFoundC
 	}
 }
 
-// Camera calibration from images with detected patterns
+// Camera calibration from the images that the user saved with detected chessboard patterns.
 void cameraCalibration(vector<Mat> calibrationImages, Size boardSize, float squareSize, Mat& cameraMatrix, Mat& distCoeffs)
 {
 	vector<vector<Point2f>> imagePoints;
@@ -244,11 +252,9 @@ void cameraCalibration(vector<Mat> calibrationImages, Size boardSize, float squa
 
 	// The Magic of OpenCV!
 	calibrateCamera(objectPoints, imagePoints, boardSize, cameraMatrix, distCoeffs, rvecs, tvecs);
-	//double rms = calibrateCamera(objectPoints, imagePoints, boardSize, cameraMatrix, distCoeffs, rvecs, tvecs, CV_CALIB_USE_INTRINSIC_GUESS);
-	//cout << "Re-projection error reported by calibrateCamera: " << rms << endl;
 }
 
-// Save camera calibration matrix into a file
+// Save camera calibration matrix into a plain text file
 bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distCoeffs)
 {
 	ofstream outStream(name);
@@ -293,7 +299,7 @@ bool saveCameraCalibration(string name, Mat cameraMatrix, Mat distCoeffs)
 	return false;
 }
 
-// Load camera calibration matrix from a file
+// Load camera calibration matrix from a plain text file
 bool loadCameraCalibration(string name, Mat& cameraMatrix, Mat& distCoeffs)
 {
 	ifstream inStream(name);
@@ -343,6 +349,7 @@ bool loadCameraCalibration(string name, Mat& cameraMatrix, Mat& distCoeffs)
 	return false;
 }
 
+// Draws an arrowed line projected to the world coordinate system using the camera intrinsic/extrinsics, in the given colour. 
 void drawAxis(float x, float y, float z, Scalar color, Mat rvec, Mat tvec, Mat& cameraMatrix, Mat& distCoeffs, Mat& image)
 {
 	vector<Point3f> points;
@@ -359,6 +366,7 @@ void drawAxis(float x, float y, float z, Scalar color, Mat rvec, Mat tvec, Mat& 
 	arrowedLine(image, projectedPoints[0], projectedPoints[1], color);
 }
 
+// Draws a cube with given side length and thickness and color, given the camera parameters.
 void drawCube(float length, int thickness, Scalar color, Mat rvec, Mat tvec, Mat& cameraMatrix, Mat& distCoeffs, Mat& image)
 {
 	vector<Point3f> points;
@@ -375,7 +383,7 @@ void drawCube(float length, int thickness, Scalar color, Mat rvec, Mat tvec, Mat
 	points.push_back(Point3f(length, length, -length)); // Point 6
 	points.push_back(Point3f(0.f,    length, -length)); // Point 7
 
-	// Projects points using projectPoints method
+	// Projects points to world space using projectPoints method.
 	projectPoints(points, rvec, tvec, cameraMatrix, distCoeffs, projectedPoints);
 
 	// Create lines from cube points
