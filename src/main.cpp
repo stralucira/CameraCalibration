@@ -1,4 +1,4 @@
-/** 
+/**
 	UU-INFOMCV 2018
 	Assignment 1 - Camera Geometric Calibration
 
@@ -54,7 +54,7 @@ int main()
 	// Distortion coefficients of 8 elements
 	Mat distCoeffs;
 
-	// Manually save a good calibrated image
+	// Container for images used as camera calibration input
 	vector<Mat> savedImages;
 
 	// Start video capture and initialize image containers
@@ -69,7 +69,7 @@ int main()
 		cout << "cannot open camera";
 	}
 
-	// Create windows
+	// Create camera window
 	namedWindow("Camera", CV_WINDOW_AUTOSIZE);
 	moveWindow("Camera", 50, 50);
 
@@ -119,18 +119,30 @@ int main()
 				if (cameraUndistorted)
 				{
 					undistort(cameraFrame, cameraFrameUndistorted, cameraMatrix, distCoeffs);
+					putText(cameraFrameUndistorted, "Press D to toggle distortion. Press R to reset calibration.",
+						cvPoint(10, 15), FONT_HERSHEY_COMPLEX_SMALL, 0.6, cvScalar(200, 200, 250), 1, CV_AA);
 					drawToFrame = cameraFrameUndistorted;
 				}
 				else
 				{
+					putText(cameraFrame, "Press D to toggle distortion. Press R to reset calibration.",
+						cvPoint(10, 15), FONT_HERSHEY_COMPLEX_SMALL, 0.6, cvScalar(200, 200, 250), 1, CV_AA);
 					drawToFrame = cameraFrame;
 				}
 			}
 			
 			if (!cameraCalibrated)
-			{
-				putText(drawToFrame, "Pattern found. Press Space to save. " + to_string(savedImages.size()) + " /" + to_string(boardCount) + ".", cvPoint(30, 30),
-					FONT_HERSHEY_COMPLEX_SMALL, 0.6, cvScalar(200, 200, 250), 1, CV_AA);
+			{	
+				if (savedImages.size() >= boardCount)
+				{
+					putText(drawToFrame, "Pattern found. Press Space to save. " + to_string(savedImages.size()) + "/" + to_string(boardCount) + ". Press Enter to calibrate.",
+						cvPoint(10, 15), FONT_HERSHEY_COMPLEX_SMALL, 0.6, cvScalar(200, 200, 250), 1, CV_AA);
+				}
+				else
+				{
+					putText(drawToFrame, "Pattern found. Press Space to save. " + to_string(savedImages.size()) + "/" + to_string(boardCount) + ".",
+						cvPoint(10, 15), FONT_HERSHEY_COMPLEX_SMALL, 0.6, cvScalar(200, 200, 250), 1, CV_AA);
+				}
 			}
 
 			imshow("Camera", drawToFrame);
@@ -140,10 +152,32 @@ int main()
 			if (cameraCalibrated && cameraUndistorted)
 			{
 				undistort(cameraFrame, cameraFrameUndistorted, cameraMatrix, distCoeffs);
+				putText(cameraFrameUndistorted, "Press D to toggle distortion. Press R to reset calibration.", cvPoint(10, 15),
+					FONT_HERSHEY_COMPLEX_SMALL, 0.6, cvScalar(200, 200, 250), 1, CV_AA);
 				imshow("Camera", cameraFrameUndistorted);
 			}
 			else
 			{
+				if (!cameraCalibrated)
+				{
+					if (savedImages.size() >= boardCount)
+					{
+						putText(cameraFrame, "Press L to load saved calibration, use chessboard to calibrate,",
+							cvPoint(10, 15), FONT_HERSHEY_COMPLEX_SMALL, 0.6, cvScalar(200, 200, 250), 1, CV_AA);
+						putText(cameraFrame, "or press Enter to calibrate.",
+							cvPoint(10, 30), FONT_HERSHEY_COMPLEX_SMALL, 0.6, cvScalar(200, 200, 250), 1, CV_AA);
+					}
+					else
+					{
+						putText(cameraFrame, "Press L to load saved calibration or use chessboard to calibrate.",
+							cvPoint(10, 15), FONT_HERSHEY_COMPLEX_SMALL, 0.6, cvScalar(200, 200, 250), 1, CV_AA);
+					}
+				}
+				else
+				{
+					putText(cameraFrame, "Press D to toggle distortion. Press R to reset calibration.",
+						cvPoint(10, 15), FONT_HERSHEY_COMPLEX_SMALL, 0.6, cvScalar(200, 200, 250), 1, CV_AA);
+				}
 				imshow("Camera", cameraFrame);
 			}
 		}
